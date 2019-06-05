@@ -21,7 +21,7 @@ STACK ENDS
 ROUT proc far
 	jmp ROUT_begin
 ROUT_DATA:
-	SIGNATURE DB 'UGAY' 
+	SIGNATURE DB 'ROFL' 
 	KEEP_IP DW 0 
 	KEEP_CS DW 0 
 	KEEP_PSP DW 0 
@@ -102,10 +102,10 @@ CHECK_HANDLER proc near
 	int 21h 
 	mov si, offset SIGNATURE 
 	sub si, offset ROUT 
-	mov ax,'GU'
+	mov ax,'OR'
 	cmp ax,es:[bx+si]
 	jne not_loaded
-	mov ax, 'YA'
+	mov ax, 'LF'
 	cmp ax,es:[bx+si+2] 
 	je loaded
 not_loaded:
