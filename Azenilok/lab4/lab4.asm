@@ -61,7 +61,7 @@ ROUT proc far
 	jmp ROUT_begin
 
 	; Data
-	SIGNATURE DB 'UGAY' ; идентификатор (сигнатура)
+	SIGNATURE DB 'ROFL' ; идентификатор (сигнатура)
 	KEEP_CS DW 0 ; сегмент
 	KEEP_IP DW 0 ; смещение
 	KEEP_PSP DW 0 ; PSP
@@ -181,10 +181,10 @@ CHECK_HANDLER proc near
 	sub si, offset ROUT ; в si смещение сигнатуры от начала функции
 	
 	; сравниваем  с идеалом
-	mov ax,'GU'
+	mov ax,'OR'
 	cmp ax,es:[bx+si]
 	jne not_loaded
-	mov ax, 'YA'
+	mov ax, 'LF'
 	cmp ax,es:[bx+si+2] 
 	je loaded
 	; Загружаем новый Обработчик
