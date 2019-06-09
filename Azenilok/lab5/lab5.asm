@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 _CODE SEGMENT
 		ASSUME CS:_CODE, DS:_DATA, ES:NOTHING, SS:_STACK
 		
@@ -14,6 +15,71 @@ ROUT 	PROC 	FAR
 		KEEP_AX		dw 	?
 		KEEP_SP 	dw 	0
 		KEY_CODE	db	2ch
+=======
+INT_STACK SEGMENT STACK
+	DW 32 DUP (?)
+INT_STACK ENDS
+
+CODE SEGMENT
+	ASSUME CS:CODE, DS:DATA, ES:DATA, SS:STACK
+START: JMP MAIN
+
+DATA SEGMENT
+	str_loaded DB 'New interruption',0DH,0AH,'$'
+	str_already_loaded DB 'interruption has been loaded yet!',0DH,0AH,'$'
+	str_unloaded DB 'Unloaded!',0DH,0AH,'$'
+	endl db 0DH,0AH,'$'
+DATA ENDS
+
+STACK SEGMENT STACK
+	DW 256 DUP (?)
+STACK ENDS
+
+; Обработчик прерывания
+ROUT proc far
+	jmp ROUT_begin
+ROUT_DATA:
+	SIGNATURE DB 'ROFL' 
+	KEEP_IP DW 0 
+	KEEP_CS DW 0 
+	KEEP_PSP DW 0 
+	KEEP_SS DW 0
+	KEEP_AX DW 0	
+	KEEP_SP DW 0 
+ROUT_begin:
+	mov KEEP_AX, ax
+	mov KEEP_SS, ss
+	mov KEEP_SP, sp
+	mov ax, seg INT_STACK 
+	mov ss, ax
+	mov sp, 32h
+	mov ax, KEEP_ax
+
+	push ax
+	push dx
+	push ds
+	push es
+	in al, 60H ;читаем ключ для скан-кода
+	cmp al, 0Eh 
+	je DO_REQ 
+	
+	pushf
+	call dword ptr CS:KEEP_IP 
+	jmp ROUT_END
+	
+; собственный обработчик
+DO_REQ:
+	push ax
+	in al, 61h 
+	mov ah, al  
+	or al, 80h 
+	out 61h, al 
+	xchg ah, al 
+	out 61h, al 
+	mov al, 20h 
+	out 20h, al 
+	pop ax
+>>>>>>> e8104f612878073ccc37faaf720d6d8e43271f43
 	
 	start:
 		mov 	KEEP_SS, SS 
@@ -51,6 +117,7 @@ ROUT 	PROC 	FAR
 		out 	20h, al 
 		pop 	ax
 	
+<<<<<<< HEAD
 	ADD_TO_BUFF: 
 		mov 	ah, 05h 
 		mov 	cl, 02h 
@@ -173,6 +240,95 @@ DELETE_ROUT	PROC
 		
 		lea		dx, UnloudResident
 		call 	PRINT
+=======
+PRINT_DX proc near
+	mov ah,09h
+	int 21h
+	ret
+PRINT_DX endp
+
+CHECK_HANDLER proc near
+	mov ah,35h 
+	mov al,09h 
+	int 21h 
+	mov si, offset SIGNATURE 
+	sub si, offset ROUT 
+	mov ax,'OR'
+	cmp ax,es:[bx+si]
+	jne not_loaded
+	mov ax, 'LF'
+	cmp ax,es:[bx+si+2] 
+	je loaded
+not_loaded:
+	call SET_HANDLER
+	mov dx,offset LAST_BYTE 
+	mov cl,4 
+	shr dx,cl
+	inc dx
+	add dx,CODE 
+	sub dx,CS:KEEP_PSP 
+	xor al,al
+	mov ah,31h
+	int 21h 
+
+loaded: 
+	push es
+	push ax
+	mov ax,KEEP_PSP 
+	mov es,ax
+	cmp byte ptr es:[82h],'/' 
+	je next_symbol
+	cmp byte ptr es:[82h],'|' 
+	jne args_false
+next_symbol:
+	cmp byte ptr es:[83h],'u' 
+	jne args_false
+	cmp byte ptr es:[84h],'n'
+	je do_unload
+
+args_false:
+	pop ax
+	pop es
+	mov dx,offset str_already_loaded
+	call PRINT_DX
+	ret
+
+do_unload:
+	pop ax
+	pop es
+	call DELETE_HANDLER
+	mov dx,offset str_unloaded
+	call PRINT_DX
+	ret
+CHECK_HANDLER endp
+
+SET_HANDLER proc near
+	push dx
+	push ds
+
+	mov ah,35h
+	mov al,09h
+	int 21h; es:bx
+	mov CS:KEEP_IP,bx 
+	mov CS:KEEP_CS,es
+
+	mov dx,offset ROUT
+	mov ax,seg ROUT
+	mov ds,ax
+	mov ah,25h
+	mov al,09h
+	int 21h
+
+	pop ds
+	mov dx,offset str_loaded
+	call PRINT_DX
+	pop dx
+	ret
+SET_HANDLER ENDP
+
+DELETE_HANDLER proc
+	push ds
+>>>>>>> e8104f612878073ccc37faaf720d6d8e43271f43
 		CLI
 		mov 	ah, 35h
 		mov 	al, 09h
