@@ -1,273 +1,272 @@
-INT_STACK SEGMENT STACK
-	DW 32 DUP (?)
-INT_STACK ENDS
-
-STACK SEGMENT STACK
-	DW 256 DUP (?)
-STACK ENDS
-
-DATA SEGMENT
-	str_loaded DB 'new interruption',0DH,0AH,'$'
-	str_already_loaded DB 'interruption has been loaded yet',0DH,0AH,'$'
-	str_unloaded DB 'unloaded!',0DH,0AH,'$'
-	endl db 0DH,0AH,'$'
-DATA ENDS
-
-CODE SEGMENT
-	ASSUME CS:CODE, DS:DATA, ES:DATA, SS:STACK
-START: JMP MAIN
-
-
-; Сокращение для функции вывода.
-PRINT_DX proc near
-	mov AH,09h
-	int 21h
-	ret
-PRINT_DX endp
-
-; Установка позиции курсора
-SET_CURSOR_POSITION PROC 
-	push AX
-	push BX
-	push CX
-	mov AH,2
-	mov BH,0
-	int 10h
-	pop CX
-	pop BX
-	pop AX
-	ret
-SET_CURSOR_POSITION ENDP
-
-; Получение позиции курсора
-; Вход: BH = видео страница
-; Выход: DH, DL = текущие строка, колонка курсора
-;		 CH, CL = текущие начальная, конечная строки
-GET_CURSOR_POSITION PROC
-	push AX
-	push BX
-	push CX
-	mov AH,3
-	mov BH,0
-	int 10h
-	pop CX
-	pop BX
-	pop AX
-	ret
-GET_CURSOR_POSITION ENDP
-
-; Обработчик прерывания
-ROUT proc far 
-	jmp ROUT_begin
-
-	; Data
-	SIGNATURE DB 'ROFL' ; идентификатор (сигнатура)
-	KEEP_CS DW 0 ; сегмент
-	KEEP_IP DW 0 ; смещение
-	KEEP_PSP DW 0 ; PSP
-	IS_LOADED DB 0 ; флаг загрузки
-	str_counter DB 'Number of handler calls (00000)$' ;счётчик
-	KEEP_SS DW 0
-	KEEP_AX DW 0	
-	KEEP_SP DW 0
-
-ROUT_begin:
-	mov KEEP_AX, ax
-	mov KEEP_SS, ss
-	mov KEEP_SP, sp
-	mov ax, seg INT_STACK ;устанавливаем собственный стек
-	mov ss, ax
-	mov sp, 32h
-	mov ax, KEEP_ax
+_CODE SEGMENT
+		ASSUME CS:_CODE, DS:_DATA, ES:NOTHING, SS:_STACK
+		
+ROUT 	PROC 	FAR
+		jmp 	start
+		
+		SIGNATURE 	dw 	01984h
+		KEEP_PSP 	dw	0
+		KEEP_IP 	dw 	0
+		KEEP_CS 	dw 	0 
+		INT_STACK 	dw 	100 dup (?)
+		COUNT 		dw 	0
+		KEEP_SS 	dw 	0
+		KEEP_AX		dw 	?
+		KEEP_SP 	dw 	0
+		MESSAGE 	db 'Number of calls:        $'
 	
-	push ax
-	push dx
-	push ds
-	push es
+	start:
+		mov 	KEEP_SS, SS 
+		mov 	KEEP_SP, SP 
+		mov 	KEEP_AX, AX 
+		mov 	AX, seg INT_STACK 
+		mov 	SS, AX 
+		mov 	SP, 0 
+		mov 	AX, KEEP_AX
+		
+		push 	ax
+		push 	bp
+		push 	es
+		push 	ds
+		push 	dx
+		push 	di
+		
+		mov 	ax, cs
+		mov 	ds, ax 
+		mov 	es, ax 
+		mov 	ax, CS:COUNT
+		add 	ax, 1
+		mov 	CS:COUNT, ax
+		mov 	di, offset MESSAGE + 20
+		call 	WRD_TO_HEX
+		mov 	bp, offset MESSAGE
+		call 	outputBP
+		
+		pop 	di
+		pop 	dx
+		pop 	ds
+		pop 	es
+		pop 	bp
+		pop 	ax
+		mov 	al, 20h
+		out 	20h, al
+		
+		mov 	AX, KEEP_SS
+		mov 	SS, AX
+		mov 	AX, KEEP_AX
+		mov 	SP, KEEP_SP
+		
+		iret
+ROUT ENDP 
 
-	cmp IS_LOADED, 1
-	je ROUT_restore_default
-	call GET_CURSOR_POSITION
-	push DX ; в dx текущее положение курсора
-	mov DH,0 ; строка
-	mov DL,0 ; столбик
-	call SET_CURSOR_POSITION
+TETR_TO_HEX	PROC near
+		and		al,0fh
+		cmp		al,09
+		jbe		NEXT
+		add		al,07
+NEXT:	add		al,30h
+		ret
+TETR_TO_HEX	ENDP
 
-ROUT_number_of_interaptions:	
-	push ax
-	push bx
-	push si 
-	push ds
-	mov ax,SEG str_counter
-	mov ds,ax
-	mov bx,offset str_counter
-	add bx,26 ;смещение к последней цифре (хардкод) - 2
+BYTE_TO_HEX	PROC near
 
-	mov si,3
-next_number:
-		mov ah,[bx+si]
-		inc ah
-		cmp ah,58 ; сравниваем с 9
-	jne ROUT_after_adding_1
-		mov ah,48 ; присваиваем 0
-		mov [bx+si],ah
-		dec si
-		cmp si, 0
-	jne next_number
+		push	cx
+		mov		ah,al
+		call	TETR_TO_HEX
+		xchg	al,ah
+		mov		cl,4
+		shr		al,cl
+		call	TETR_TO_HEX 
+		pop		cx 			
+		ret
+BYTE_TO_HEX	ENDP
 
-ROUT_after_adding_1:
-	mov [bx+si],ah
-    pop ds
-    pop si
-	pop bx
-	pop ax
+WRD_TO_HEX	PROC near
 
-	push es 
-	push bp
-	mov ax,SEG str_counter
-	mov es,ax
-	mov ax,offset str_counter
-	mov bp,ax
-	mov ah,13h 
-	mov al,0 
-	mov cx,31 ; длина строки
-	mov bh,0
-	int 10h
-	pop bp
-	pop es
-	
-	; возврат положения курсора
-	pop dx
-	call SET_CURSOR_POSITION
-	jmp ROUT_end
+		push	bx
+		mov		bh,ah
+		call	BYTE_TO_HEX
+		mov		[di],ah
+		dec		di
+		mov		[di],al
+		dec		di
+		mov		al,bh
+		xor		ah,ah
+		call	BYTE_TO_HEX
+		mov		[di],ah
+		dec		di
+		mov		[di],al
+		pop		bx
+		ret
+WRD_TO_HEX	ENDP
 
-	; Восстановление дефолтного вектора и освобождение памяти
-ROUT_restore_default:
-	CLI ; команда игнорирования прерываний от внешних устройств
-	; восстаналвиваем вектор
-	mov dx,KEEP_IP
-	mov ax,KEEP_CS
-	mov ds,ax
-	mov ah,25h 
-	mov al,1Ch 
-	int 21h
-	; Освобождаем памятт после засевшего (словно партизана) резидента
-	mov es, KEEP_PSP
-	mov es, es:[2Ch]
-	mov ah, 49h
-	int 21h 
-	mov es, KEEP_PSP
-	mov ah, 49h 
-	int 21h	
-	STI ; останов игнорирования прерываний
+outputBP PROC near
+		push 	ax
+		push 	bx
+		push 	dx
+		push 	cx
+		mov 	ah, 13h
+		mov 	al, 0
+		mov 	bl, 03h
+		mov 	bh, 0
+		mov 	dh, 23
+		mov 	dl, 22
+		mov 	cx, 21
+		int 	10h  
+		pop 	cx
+		pop 	dx
+		pop 	bx
+		pop 	ax
+		ret
+outputBP ENDP
+END_ROUT:
 
-ROUT_end:
-	pop es
-	pop ds
-	pop dx
-	pop ax
-	mov ss, KEEP_SS
-	mov sp, KEEP_SP
-	mov ax, KEEP_AX	
-	iret
-ROUT endp
+PRINT	PROC 	near
+		push 	ax
+		mov 	ah,09h
+		int		21h
+		pop 	ax
+		ret
+PRINT	ENDP
 
-; Проверка состояния загрузки нового прерывания в память
-CHECK_HANDLER proc near
-	mov ah,35h 
-	mov al,1Ch 
-	int 21h ; в es bx получим адрес обработчика прерываний
-	mov si, offset SIGNATURE 
-	sub si, offset ROUT ; в si смещение сигнатуры от начала функции
-	
-	; сравниваем  с идеалом
-	mov ax,'OR'
-	cmp ax,es:[bx+si]
-	jne not_loaded
-	mov ax, 'LF'
-	cmp ax,es:[bx+si+2] 
-	je loaded
-	; Загружаем новый Обработчик
-not_loaded:
-	call SET_HANDLER
-	; Вычисляем память для резидента
-	mov dx,offset LAST_BYTE ; в байтах
-	mov cl,4 ;в параграфы в dx
-	shr dx,cl
-	inc dx
-	add dx,CODE ;прибавляем адрес code seg
-	sub dx,KEEP_PSP ;вычитаем адрес psp
-	xor ax,ax
-	mov ah,31h
-	int 21h 
+CHECK_ROUT	PROC
+		mov 	ah, 35h
+		mov 	al, 1ch
+		int 	21h 
+		mov 	si, offset SIGNATURE
+		sub 	si, offset ROUT 
+		mov 	ax, 01984h
+		cmp 	ax, ES:[BX+SI] 
+		je 		ROUT_IS_LOADED
+		call 	SET_ROUT
+	ROUT_IS_LOADED:
+		call 	DELETE_ROUT
+		ret
+CHECK_ROUT	ENDP
 
-; Проверка аргумента cmd
-loaded: 
-	push es
-	push ax
-	mov ax,KEEP_PSP 
-	mov es,ax
-	cmp byte ptr es:[82h],'/' 
-	je next_symbol
-	cmp byte ptr es:[82h],'|' 
-	jne args_false
-next_symbol:
-	cmp byte ptr es:[83h],'u' 
-	jne args_false
-	cmp byte ptr es:[84h],'n'
-	je do_unload
+SET_ROUT PROC
+		mov 	ax, KEEP_PSP 
+		mov 	es, ax
+		cmp 	byte ptr es:[80h], 0
+		je 		LOAD
+		cmp 	byte ptr es:[82h], '/'
+		jne 	LOAD
+		cmp 	byte ptr es:[83h], 'u'
+		jne     LOAD
+		cmp 	byte ptr es:[84h], 'n'
+		jne 	LOAD
+		
+		lea 	dx, NotYetLoad
+		call 	PRINT
+		jmp		EXIT
+	LOAD:
+		mov 	ah, 35h
+		mov 	al, 1ch
+		int 	21h
+		mov 	KEEP_CS, ES
+		mov 	KEEP_IP, BX
+		lea		dx, LoadResident
+		call 	PRINT
+		;interrupt vector loading
+		push 	ds
+		mov 	dx, offset ROUT
+		mov 	ax, seg ROUT
+		mov 	ds, ax
+		mov 	ah, 25h
+		mov 	al, 1ch
+		int 	21h
+		pop 	ds
+		;memory allocation
+		mov 	dx, offset END_ROUT
+		mov 	cl, 4
+		shr 	dx, cl 
+		inc 	dx
+		add 	dx,	_CODE
+		sub 	dx,	KEEP_PSP
+		sub 	al, al
+		mov 	ah, 31h
+		int 	21h
+	EXIT:
+		sub 	al, al
+		mov 	ah, 4ch
+		int 	21h
+SET_ROUT ENDP
 
-args_false:
-	pop ax
-	pop es
-	mov dx,offset str_already_loaded
-	call PRINT_DX
-	ret
+DELETE_ROUT	PROC
+		push 	dx
+		push 	ax
+		push 	ds
+		push 	es
+		
+		mov 	ax, KEEP_PSP 
+		mov 	es, ax 
+		cmp 	byte ptr es:[80h], 0
+		je 		END_DELETE
+		cmp 	byte ptr es:[82h], '/'
+		jne 	END_DELETE
+		cmp 	byte ptr es:[83h], 'u'
+		jne 	END_DELETE
+		cmp 	byte ptr es:[84h], 'n'
+		jne 	END_DELETE
+		
+		lea		dx, UnloudResident
+		call 	PRINT
+		
+		mov 	ah, 35h
+		mov 	al, 1ch
+		int 	21h 
+		mov 	si, offset KEEP_IP
+		sub 	si, offset ROUT
+		 
+		mov 	dx, es:[bx+si]
+		mov 	ax, es:[bx+si+2]
+		mov 	ds, ax
+		mov 	ah, 25h
+		mov 	al, 1ch
+		int 	21h
+		
+		mov 	ax, es:[bx+si-2]
+		mov 	es, ax
+		mov 	ax, es:[2ch]
+		push 	es
+		mov 	es, ax
+		mov 	ah, 49h
+		int 	21h 
+		pop 	es
+		mov 	ah, 49h
+		int 	21h
 
-; Выгружаем свой Обработчик
-do_unload:
-	pop ax
-	pop es
-	mov byte ptr es:[BX+SI+10],1
-	mov dx,offset str_unloaded
-	call PRINT_DX
-	ret
-CHECK_HANDLER endp
+		jmp END_DELETE2
+		
+		END_DELETE:
+		mov 	dx, offset AlreadyLoaded
+		call 	PRINT
+		END_DELETE2:
+		
+		pop 	es
+		pop		ds
+		pop 	ax
+		pop 	dx
+		ret	
+DELETE_ROUT	ENDP
 
-;установка написанного прерывания в поле векторов прерываний
-SET_HANDLER proc near 
-	push dx
-	push ds
-
-	mov ah,35h
-	mov al,1Ch
-	int 21h; es:bx
-	mov KEEP_IP,bx 
-	mov KEEP_CS,es
-
-	mov dx,offset ROUT
-	mov ax,seg ROUT
-	mov ds,ax
-	mov ah,25h
-	mov al,1Ch
-	int 21h
-
-	pop ds
-	mov dx,offset str_loaded
-	call PRINT_DX
-	pop dx
-	ret
-SET_HANDLER ENDP 
-
-
-MAIN:
-	mov AX,DATA
-	mov DS,AX
-	mov KEEP_PSP,ES
-	call CHECK_HANDLER
-	xor AL,AL
-	mov AH,4Ch ;выход 
-	int 21H
-LAST_BYTE:
-	CODE ENDS	
-END START
+MAIN 	PROC	NEAR
+		mov 	ax, _DATA
+		mov 	ds, ax
+		mov 	KEEP_PSP, es
+		call 	CHECK_ROUT
+		mov 	ax, 4C00h
+		int 	21h
+		ret
+MAIN	ENDP
+_CODE 	ENDS
+_STACK	SEGMENT	STACK
+		db	512	dup(0)
+_STACK	ENDS
+_DATA	SEGMENT
+		LoadResident		db		'Resident was loaded!', 0dh, 0ah, '$'
+		UnloudResident		db		'Resident was unloaded!', 0dh, 0ah, '$'
+		AlreadyLoaded		db		'Resident is already loaded!', 0dh, 0ah, '$'
+		NotYetLoad 		db 		'Resident not yet loaded!', 0DH, 0AH, '$'
+_DATA 	ENDS
+		END  	MAIN
